@@ -1,0 +1,2272 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Side Scrolling Game - Debug</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    canvas {
+      border: 3px solid #333;
+      image-rendering: pixelated;
+    }
+
+    #debug {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: lime;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 5px;
+      display: none;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD de Debug -->
+  <div id="debug">
+    Mouse X: <span id="mouseX">0</span><br>
+    Mouse Y: <span id="mouseY">0</span><br>
+    Fixed X: <span id="fixedX">-</span><br>
+    Fixed Y: <span id="fixedY">-</span>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const debugPanel = document.getElementById('debug');
+
+    // Configuração Full HD
+    canvas.width = 1920;
+    canvas.height = 1080;
+
+    // Variáveis da pista
+      let streetImage = new Image();
+      // ==================== TELA INICIAL ====================
+
+        let introScreen = true;
+
+        let posterImage = new Image();
+        posterImage.src = 'sprites/map/poster.png';
+
+        let introBlinkTimer = 0;
+      let streetX1 = 0;
+      let streetX2 = 0;           // Vamos ajustar depois
+      // ==================== DIFICULDADE / VELOCIDADE ====================
+      const baseScrollSpeed = 5;
+      const maxScrollSpeed = baseScrollSpeed * 1.65; // limite de +25%
+
+      let currentScrollSpeed = baseScrollSpeed;
+
+      let difficultyTimer = 0;
+      const difficultyIncreaseInterval = 900; // aproximadamente 10 segundos em 60fps
+      const speedIncreaseAmount = 0.25;
+
+      let streetY = 485;
+
+      // Camada mais distante do fundo
+        let bd2Image = new Image();
+        bd2Image.src = 'sprites/map/bd2.png';
+
+        let bd2X1 = 0;
+        let bd2X2 = 0;
+        let bd2Width = 0;
+        let bd2Height = 0;
+
+        // 75% da velocidade da pista
+        const bd2ParallaxFactor = 0.71;
+
+        // Posição vertical da camada
+        let bd2Y = 45;
+
+        //=======================================
+
+        // Camada céu / fundo mais distante
+          let skyImage = new Image();
+          skyImage.src = 'sprites/map/skyv1.png';
+
+          let skyX1 = 0;
+          let skyX2 = 0;
+          let skyWidth = 0;
+          let skyHeight = 0;
+
+          // 20% da velocidade da pista
+          const skyParallaxFactor = 0.20;
+
+          // Posição vertical da camada
+          let skyY = 0;
+
+      // Camada mais distante do fundo
+        let bdImage = new Image();
+        bdImage.src = 'sprites/map/bd1.png';
+
+        let bdX1 = 0;
+        let bdX2 = 0;
+        let bdWidth = 0;
+        let bdHeight = 0;
+
+        // 88% da velocidade da pista
+        const bdParallaxFactor = 0.80;
+
+        // Posição vertical da camada
+        let bdY = 12;
+
+      // ==================== PARALLAX FUNDO ====================
+
+        let treesImage = new Image();
+        treesImage.src = 'sprites/map/trees1.png';
+
+        let treesX1 = 0;
+        let treesX2 = 0;
+        let treesWidth = 0;
+        let treesHeight = 0;
+
+        // 95% da velocidade da pista
+        const treesParallaxFactor = 0.90;
+
+        // Posição vertical da camada
+        let treesY = 155;
+
+        // ==================== IMAGEM DOS CONTROLES ====================
+
+          let controlsImage = new Image();
+          controlsImage.src = 'sprites/map/controls.png';
+
+          // ==================== BTC PIZZA DAY EVENT ====================
+
+            let pizzaDayImage = new Image();
+            pizzaDayImage.src = 'sprites/map/final.png';
+
+            let btcPizzaDayTriggered = false;
+            let showPizzaDayScreen = false;
+
+            // ==================== CAMADA DECORATIVA ENTRE TREES E PISTA ====================
+
+              let decorImages = {
+                out1: new Image(),
+                trp1: new Image(),
+                trp2: new Image(),
+                trp3: new Image()
+              };
+
+              decorImages.out1.src = 'sprites/map/out1.png';
+              decorImages.trp1.src = 'sprites/map/trp1.png';
+              decorImages.trp2.src = 'sprites/map/trp2.png';
+              decorImages.trp3.src = 'sprites/map/trp3.png';
+
+              let decorObjects = [];
+
+              let nextDecorSpawnX = 900;
+
+              const decorPattern = [
+                "trp1",
+                "trp2",
+                "trp3",
+                "trp1",
+                "trp2",
+                "trp3",
+                "out1"
+              ];
+
+              let decorPatternIndex = 0;
+
+              const decorSpacing = 430;
+
+        // ==================== OVERLAY DE ILUMINAÇÃO ====================
+
+          let overlayImage = new Image();
+          overlayImage.src = 'sprites/map/overlayv1.png';
+
+      // Novas variáveis para manter tamanho original
+      let streetWidth = 0;
+      let streetHeight = 0;
+      let gameStarted = false;
+
+      // ==================== TRILHA SONORA ====================
+
+        const gameMusic = new Audio('sounds/track1.mp3');
+        gameMusic.loop = true;
+        gameMusic.volume = 0.35;
+
+        let musicStarted = false;
+
+        // ==================== SFX COLISÃO COM CARRO ====================
+
+          const carCrashSfx = new Audio('sounds/carsfx.mp3');
+          carCrashSfx.volume = 0.45;
+
+      let pizzaShopImage = new Image(); pizzaShopImage.src = 'sprites/map/papajhonspizza.png';
+      // Variáveis da pizzaria
+        let pizzaShopX = -20; // Posição inicial no mapa (ex: 500 pixels à frente do início)
+        let pizzaShopY = -40;
+
+        // ==================== SFX DANO GERAL ====================
+
+          const damageSfx = new Audio('sounds/damage.mp3');
+          damageSfx.volume = 0.25;
+
+          // ==================== SFX COLETA DE MOEDA ====================
+
+            const coinSfx = new Audio('sounds/coin.mp3');
+            coinSfx.volume = 0.20;
+
+            // ==================== SFX VIDA EXTRA ====================
+
+              const extraLifeSfx = new Audio('sounds/extralife.mp3');
+              extraLifeSfx.volume = 0.50;
+
+              // ==================== SFX GAME OVER ====================
+
+                const gameOverSfx = new Audio('sounds/gameoversfx.mp3');
+                gameOverSfx.volume = 0.65;
+
+        // ==================== MOEDAS BTC ====================
+
+          // Frames da animação da moeda
+          let btcCoinFrames = [];
+
+          // Carrega os 5 sprites
+          for (let i = 1; i <= 5; i++) {
+            let img = new Image();
+            img.src = `sprites/map/btcq${i}.png`;
+            btcCoinFrames.push(img);
+          }
+
+         // Lista dinâmica de moedas no mapa
+          let btcCoins = [];
+
+          // Controle de geração infinita
+          let nextCoinPatternX = 2200;
+          const coinSpacing = 85;
+          const coinPatternDistance = 900;
+
+          // Alturas possíveis dentro da pista
+          const coinLanes = [540, 620, 700, 780];
+
+          // Tipos de padrões
+          const coinPatterns = [
+            "line",
+            "diagonalUp",
+            "diagonalDown",
+            "zigzag",
+            "doubleLine",
+            "arc"
+          ];
+
+          function playGameMusic() {
+              if (!musicStarted) {
+                gameMusic.currentTime = 0;
+                musicStarted = true;
+              }
+
+              gameMusic.play().catch((error) => {
+                console.log("Áudio aguardando interação do usuário:", error);
+              });
+            }
+
+            function pauseGameMusic() {
+              gameMusic.pause();
+            }
+
+            function stopGameMusic() {
+              gameMusic.pause();
+              gameMusic.currentTime = 0;
+              musicStarted = false;
+            }
+
+            function playCarCrashSfx() {
+                const sfx = carCrashSfx.cloneNode();
+                sfx.volume = carCrashSfx.volume;
+
+                sfx.play().catch((error) => {
+                  console.log("SFX de carro aguardando interação do usuário:", error);
+                });
+              }
+
+              function playDamageSfx() {
+                  const sfx = damageSfx.cloneNode();
+                  sfx.volume = damageSfx.volume;
+
+                  sfx.play().catch((error) => {
+                    console.log("SFX de dano aguardando interação do usuário:", error);
+                  });
+                }
+
+                function playCoinSfx() {
+                    const sfx = coinSfx.cloneNode();
+                    sfx.volume = coinSfx.volume;
+
+                    sfx.play().catch((error) => {
+                      console.log("SFX de moeda aguardando interação do usuário:", error);
+                    });
+                  }
+
+                  function playExtraLifeSfx() {
+                      const sfx = extraLifeSfx.cloneNode();
+                      sfx.volume = extraLifeSfx.volume;
+
+                      sfx.play().catch((error) => {
+                        console.log("SFX de vida extra aguardando interação do usuário:", error);
+                      });
+                    }
+
+                    function playGameOverSfx() {
+                        const sfx = gameOverSfx.cloneNode();
+                        sfx.volume = gameOverSfx.volume;
+
+                        sfx.play().catch((error) => {
+                          console.log("SFX de game over aguardando interação do usuário:", error);
+                        });
+                      }
+
+          function randomFromArray(array) {
+              return array[Math.floor(Math.random() * array.length)];
+            }
+
+            function createCoin(x, y) {
+                if (!isCoinSpawnAreaSafe(x, y)) {
+                  return;
+                }
+
+                btcCoins.push({
+                  x: x,
+                  y: y,
+                  collected: false
+                });
+              }
+
+            function isCoinSpawnAreaSafe(x, y) {
+                const coinWidth = 70;
+                const coinHeight = 70;
+
+                const coinBox = {
+                  x: x,
+                  y: y,
+                  width: coinWidth,
+                  height: coinHeight
+                };
+
+                // Evita moedas perto dos scamers
+                for (let scamer of scamers) {
+                  const scamerImage = scamerFrames[scamerFrame];
+
+                  const scamerWidth = scamerImage && scamerImage.width ? scamerImage.width : 160;
+                  const scamerHeight = scamerImage && scamerImage.height ? scamerImage.height : 220;
+
+                  const scamerBox = {
+                    x: scamer.x - 100,
+                    y: scamer.y - 100,
+                    width: scamerWidth + 200,
+                    height: scamerHeight + 200
+                  };
+
+                  if (checkCollision(coinBox, scamerBox)) {
+                    return false;
+                  }
+                }
+
+                // Evita moedas perto dos obstáculos
+                for (let obstacle of obstacles) {
+                  const obstacleImage = obstacleImages[obstacle.type];
+
+                  const obstacleWidth = obstacleImage && obstacleImage.width ? obstacleImage.width : 300;
+                  const obstacleHeight = obstacleImage && obstacleImage.height ? obstacleImage.height : 200;
+
+                  // Regra especial para carros:
+                  // moedas evitam a área visual inteira do carro, não só a hitbox de colisão
+                  if (obstacle.type === "carWhite" || obstacle.type === "carGray") {
+                    const carVisualBox = {
+                      x: obstacle.x - 120,
+                      y: obstacle.y - 120,
+                      width: obstacleWidth + 240,
+                      height: obstacleHeight + 240
+                    };
+
+                    if (checkCollision(coinBox, carVisualBox)) {
+                      return false;
+                    }
+
+                    continue;
+                  }
+
+                  // Para obstáculos pequenos, usa as hitboxes normais com margem
+                  const obstacleHitboxes = getObstacleHitboxes(obstacle);
+
+                  for (let hitbox of obstacleHitboxes) {
+                    const safeBox = {
+                      x: hitbox.x - 150,
+                      y: hitbox.y - 150,
+                      width: hitbox.width + 300,
+                      height: hitbox.height + 300
+                    };
+
+                    if (checkCollision(coinBox, safeBox)) {
+                      return false;
+                    }
+                  }
+                }
+
+                return true;
+              }
+
+            function generateCoinPattern() {
+              const pattern = randomFromArray(coinPatterns);
+              const startX = nextCoinPatternX;
+              const startY = randomFromArray(coinLanes);
+
+              if (pattern === "line") {
+                for (let i = 0; i < 7; i++) {
+                  createCoin(startX + i * coinSpacing, startY);
+                }
+              }
+
+              if (pattern === "diagonalUp") {
+                for (let i = 0; i < 7; i++) {
+                  createCoin(startX + i * coinSpacing, startY - i * 35);
+                }
+              }
+
+              if (pattern === "diagonalDown") {
+                for (let i = 0; i < 7; i++) {
+                  createCoin(startX + i * coinSpacing, startY + i * 35);
+                }
+              }
+
+              if (pattern === "zigzag") {
+                for (let i = 0; i < 8; i++) {
+                  let yOffset = i % 2 === 0 ? -45 : 45;
+                  createCoin(startX + i * coinSpacing, startY + yOffset);
+                }
+              }
+
+              if (pattern === "doubleLine") {
+                for (let i = 0; i < 6; i++) {
+                  createCoin(startX + i * coinSpacing, startY);
+                  createCoin(startX + i * coinSpacing, startY + 80);
+                }
+              }
+
+              if (pattern === "arc") {
+                const arcOffsets = [80, 35, 0, -25, 0, 35, 80];
+
+                for (let i = 0; i < arcOffsets.length; i++) {
+                  createCoin(startX + i * coinSpacing, startY + arcOffsets[i]);
+                }
+              }
+
+              nextCoinPatternX += coinPatternDistance + Math.floor(Math.random() * 500);
+            }
+
+          // Controle da animação
+          let btcFrame = 0;
+          let btcFrameCounter = 0;
+          const btcAnimationSpeed = 12;
+
+          // Quantidade coletada
+          let btcCollected = 0;
+
+          // ==================== SCAMER INIMIGO ====================
+
+            // Frames da animação do scamer
+            let scamerFrames = [];
+
+            // Carrega os 6 sprites do scamer
+            for (let i = 1; i <= 6; i++) {
+              let img = new Image();
+              img.src = `sprites/scamer1/scamerv1q${i}.png`;
+              scamerFrames.push(img);
+            }
+
+            // Lista dinâmica de scamers
+            let scamers = [];
+
+            // Controle da animação do scamer
+            let scamerFrame = 0;
+            let scamerFrameCounter = 0;
+            const scamerAnimationSpeed = 15;
+
+            // Controle de spawn infinito
+            let nextScamerSpawnX = 2800;
+
+            // Distância mínima entre scamers
+            const minScamerDistance = 1400;
+            const maxScamersOnScreen = 2;
+
+            // Faixas possíveis para o scamer aparecer
+            // ==================== FAIXAS DA PISTA ====================
+
+            // ==================== ÁREAS DA PISTA ====================
+
+              // Área onde o ponto Y do player pode se mover
+              const playerMinY = 485;
+              const playerMaxY = 833;
+
+              // Área visual total da estrada
+              const roadVisualTopY = 485;
+              const roadVisualBottomY = 1074;
+
+              // Faixas principais da área jogável do player
+              const roadLanes = [
+                { id: 0, y: 540 },
+                { id: 1, y: 620 },
+                { id: 2, y: 700 },
+                { id: 3, y: 780 }
+              ];
+
+              // Faixas extras para organizar objetos grandes na parte visual da pista
+              const roadVisualLanes = [
+                { id: 0, y: 540 },
+                { id: 1, y: 620 },
+                { id: 2, y: 700 },
+                { id: 3, y: 780 },
+                { id: 4, y: 860 },
+                { id: 5, y: 940 }
+              ];
+
+              function getRandomLane() {
+                return randomFromArray(roadLanes);
+              }
+
+            // Estado do jogador
+            let playerAlive = true;
+
+            // ==================== VIDAS DO PLAYER ====================
+            let playerLives = 5;
+              const maxPlayerLives = 5;
+              let gameOver = false;
+
+              // A cada 450 BTC, ganha 1 vida extra
+              const btcPerExtraLife = 180;
+              let nextExtraLifeAt = btcPerExtraLife;
+
+              let playerInvulnerable = false;
+              let invulnerabilityTimer = 0;
+              const invulnerabilityDuration = 90; // frames
+
+          function countScamersOnScreen() {
+              return scamers.filter((scamer) => {
+                return scamer.x > -250 && scamer.x < canvas.width + 1600;
+              }).length;
+            }
+
+              function isTooCloseToCoins(x, y) {
+                return btcCoins.some((coin) => {
+                  const distanceX = Math.abs(coin.x - x);
+                  const distanceY = Math.abs(coin.y - y);
+
+                  return distanceX < 250 && distanceY < 120;
+                });
+              }
+
+             function createScamer(x, lane) {
+                scamers.push({
+                  x: x,
+                  y: lane.y,
+                  laneId: lane.id
+                });
+              }
+
+              function isTooCloseToOtherScamers(x, y) {
+                  return scamers.some((scamer) => {
+                    const distanceX = Math.abs(scamer.x - x);
+                    const distanceY = Math.abs(scamer.y - y);
+
+                    // Impede scamers lado a lado ou muito próximos
+                    return distanceX < 800 && distanceY < 220;
+                  });
+                }
+
+              function spawnScamer() {
+                  if (countScamersOnScreen() >= maxScamersOnScreen || scamers.length >= maxScamersOnScreen) {
+                  return;
+                }
+
+                  let spawnX = nextScamerSpawnX;
+                  let lane = findSafeLaneForScamer(spawnX);
+
+                  // Se não encontrou faixa segura, empurra o spawn para frente
+                  if (!lane) {
+                    nextScamerSpawnX += 500;
+                    return;
+                  }
+
+                  let attempts = 0;
+
+                 while (
+                  (
+                    isTooCloseToCoins(spawnX, lane.y) ||
+                    isTooCloseToObstacles(spawnX, lane.y) ||
+                    isTooCloseToOtherScamers(spawnX, lane.y)
+                  ) &&
+                  attempts < 15
+                ) {
+                    lane = findSafeLaneForScamer(spawnX);
+
+                    if (!lane) {
+                      nextScamerSpawnX += 500;
+                      return;
+                    }
+
+                    spawnX += 350;
+                    attempts++;
+                  }
+                  if (
+                  isTooCloseToCoins(spawnX, lane.y) ||
+                  isTooCloseToObstacles(spawnX, lane.y) ||
+                  isTooCloseToOtherScamers(spawnX, lane.y)
+                ) {
+                  nextScamerSpawnX += 700;
+                  return;
+                }
+
+                  createScamer(spawnX, lane);
+
+                  nextScamerSpawnX += minScamerDistance + Math.floor(Math.random() * 900);
+                }
+
+              function getPlayerHitboxes() {
+                  return [
+                    // Hitbox superior menor
+                    {
+                      x: player.x + player.width * 0.35,
+                      y: player.y + player.height * 0.18,
+                      width: player.width * 0.30,
+                      height: player.height * 0.28
+                    },
+
+                    // Hitbox inferior maior
+                    {
+                      x: player.x + player.width * 0.10,
+                      y: player.y + player.height * 0.53,
+                      width: player.width * 0.75,
+                      height: player.height * 0.35
+                    }
+                  ];
+                }
+
+                function drawPixelHeart(x, y, scale = 4, filled = true) {
+                    const heartPattern = [
+                      "01100110",
+                      "11111111",
+                      "11111111",
+                      "11111111",
+                      "01111110",
+                      "00111100",
+                      "00011000"
+                    ];
+
+                    for (let row = 0; row < heartPattern.length; row++) {
+                      for (let col = 0; col < heartPattern[row].length; col++) {
+                        if (heartPattern[row][col] === "1") {
+                          ctx.fillStyle = filled ? "#ff2d55" : "#442222";
+                          ctx.fillRect(
+                            x + col * scale,
+                            y + row * scale,
+                            scale,
+                            scale
+                          );
+                        }
+                      }
+                    }
+
+                    // contorno simples
+                    for (let row = 0; row < heartPattern.length; row++) {
+                      for (let col = 0; col < heartPattern[row].length; col++) {
+                        if (heartPattern[row][col] === "1") {
+                          ctx.strokeStyle = "#2b0008";
+                          ctx.lineWidth = 1;
+                          ctx.strokeRect(
+                            x + col * scale,
+                            y + row * scale,
+                            scale,
+                            scale
+                          );
+                        }
+                      }
+                    }
+                  }
+
+                 function drawHudPanel(x, y, width, height, borderColor, fillColor = "rgba(18, 22, 30, 0.78)") {
+                    ctx.save();
+
+                    // Fundo principal
+                    ctx.fillStyle = fillColor;
+                    ctx.fillRect(x, y, width, height);
+
+                    // Borda externa
+                    ctx.strokeStyle = borderColor;
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(x, y, width, height);
+
+                    // Borda interna sutil
+                    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x + 6, y + 6, width - 12, height - 12);
+
+                    // Faixa decorativa superior
+                    ctx.fillStyle = "rgba(255,255,255,0.08)";
+                    ctx.fillRect(x + 6, y + 6, width - 12, 18);
+
+                    // Cantos decorativos
+                    ctx.fillStyle = borderColor;
+                    ctx.fillRect(x - 2, y - 2, 8, 8);
+                    ctx.fillRect(x + width - 6, y - 2, 8, 8);
+                    ctx.fillRect(x - 2, y + height - 6, 8, 8);
+                    ctx.fillRect(x + width - 6, y + height - 6, 8, 8);
+
+                    ctx.restore();
+                  }
+
+                  function drawHudText(text, x, y, color = "white", size = 24, align = "left") {
+                    ctx.save();
+
+                    ctx.font = `bold ${size}px monospace`;
+                    ctx.textAlign = align;
+                    ctx.textBaseline = "top";
+
+                    // sombra
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+                    ctx.fillText(text, x + 3, y + 3);
+
+                    // contorno fake
+                    ctx.fillStyle = "#111";
+                    ctx.fillText(text, x + 1, y + 1);
+
+                    // texto principal
+                    ctx.fillStyle = color;
+                    ctx.fillText(text, x, y);
+
+                    ctx.restore();
+                  }
+
+                  function drawLivesHUD(x, y) {
+                    const heartScale = 4;
+                    const heartSpacing = 49;
+
+                    drawHudText("VIDAS", x, y, "#ffffff", 22);
+
+                    for (let i = 0; i < maxPlayerLives; i++) {
+                      drawPixelHeart(
+                        x + i * heartSpacing,
+                        y + 34,
+                        heartScale,
+                        i < playerLives
+                      );
+                    }
+                  }
+
+                  function drawGameHUD() {
+                    const panelX = 20;
+
+                    // Painel BTC
+                    const btcPanel = {
+                      x: panelX,
+                      y: 20,
+                      w: 250,
+                      h: 74
+                    };
+
+                    // Painel Vidas
+                   const livesPanel = {
+                      x: panelX,
+                      y: 108,
+                      w: 300,
+                      h: 96
+                    };
+
+                    drawHudPanel(btcPanel.x, btcPanel.y, btcPanel.w, btcPanel.h, "#f4d35e");
+                    drawHudPanel(livesPanel.x, livesPanel.y, livesPanel.w, livesPanel.h, "#ff4d6d");
+
+                    // BTC
+                    drawHudText("BTC", btcPanel.x + 18, btcPanel.y + 16, "#ffe066", 22);
+                    drawHudText(`${btcCollected}`, btcPanel.x + btcPanel.w - 18, btcPanel.y + 14, "#ffd43b", 34, "right");
+
+                    // Vidas
+                    drawLivesHUD(livesPanel.x + 18, livesPanel.y + 14);
+                  }
+
+                  function getDecorY(type) {
+                      if (type === "out1") return 180;
+
+                      if (type === "trp1") return 245 - 158;
+                      if (type === "trp2") return 225 - 80;
+                      if (type === "trp3") return 255 - 75;
+
+                      return 250;
+                    }
+
+                    function getDecorSpacing(type) {
+                      if (type === "out1") {
+                        return decorSpacing * 2;
+                      }
+
+                      return decorSpacing;
+                    }
+
+                    function createDecorObject(type, x) {
+                      decorObjects.push({
+                        type: type,
+                        x: x,
+                        y: getDecorY(type)
+                      });
+                    }
+
+                    function spawnNextDecorObject() {
+                      const type = decorPattern[decorPatternIndex];
+
+                      createDecorObject(type, nextDecorSpawnX);
+
+                      nextDecorSpawnX += getDecorSpacing(type);
+
+                      decorPatternIndex++;
+
+                      if (decorPatternIndex >= decorPattern.length) {
+                        decorPatternIndex = 0;
+                      }
+                    }
+
+                    function initializeDecorLayer() {
+                      decorObjects = [];
+                      nextDecorSpawnX = 900;
+                      decorPatternIndex = 0;
+
+                      for (let i = 0; i < 10; i++) {
+                        spawnNextDecorObject();
+                      }
+                    }
+
+                  function triggerPizzaDayEvent() {
+                      if (btcPizzaDayTriggered) return;
+
+                      btcPizzaDayTriggered = true;
+                      showPizzaDayScreen = true;
+                      gamePaused = true;
+
+                      pauseGameMusic();
+
+                      console.log("🎉 BTC Pizza Day event triggered!");
+                    }
+
+                    function checkPizzaDayGoal() {
+                        if (!btcPizzaDayTriggered && btcCollected >= 10000) {
+                          triggerPizzaDayEvent();
+                        }
+                      }
+
+                function getObstacleHitboxes(obstacle) {
+                    const obstacleImage = obstacleImages[obstacle.type];
+
+                    const width = obstacleImage && obstacleImage.width ? obstacleImage.width : 300;
+                    const height = obstacleImage && obstacleImage.height ? obstacleImage.height : 200;
+
+                    // ==================== HITBOX DA LIXEIRA ====================
+                    if (obstacle.type === "garbage") {
+                      return [
+                        {
+                          x: obstacle.x + width * 0.18,
+                          y: obstacle.y + height * 0.12,
+                          width: width * 0.64,
+                          height: height * 0.62
+                        }
+                      ];
+                    }
+
+                    // ==================== HITBOX DOS CARROS ====================
+                    if (obstacle.type === "carWhite" || obstacle.type === "carGray") {
+                      return [
+                        // Frente do carro
+                        {
+                          x: obstacle.x + width * 0.05,
+                          y: obstacle.y + height * 0.46,
+                          width: width * 0.38,
+                          height: height * 0.30
+                        },
+
+                        // Meio do carro
+                        {
+                          x: obstacle.x + width * 0.30,
+                          y: obstacle.y + height * 0.20,
+                          width: width * 0.38,
+                          height: height * 0.50
+                        },
+
+                        // Traseira do carro
+                        {
+                          x: obstacle.x + width * 0.62,
+                          y: obstacle.y + height * 0.25,
+                          width: width * 0.28,
+                          height: height * 0.34
+                        }
+                      ];
+                    }
+
+                    // Hitbox padrão para qualquer obstáculo futuro
+                    return [
+                      {
+                        x: obstacle.x + width * 0.15,
+                        y: obstacle.y + height * 0.15,
+                        width: width * 0.70,
+                        height: height * 0.70
+                      }
+                    ];
+                  }
+
+                  function checkCollision(rectA, rectB) {
+                    return (
+                      rectA.x < rectB.x + rectB.width &&
+                      rectA.x + rectA.width > rectB.x &&
+                      rectA.y < rectB.y + rectB.height &&
+                      rectA.y + rectA.height > rectB.y
+                    );
+                  }
+                  
+                  function checkCollisionWithMultipleHitboxes(hitboxesA, hitboxesB) {
+                      for (let boxA of hitboxesA) {
+                        for (let boxB of hitboxesB) {
+                          if (checkCollision(boxA, boxB)) {
+                            return true;
+                          }
+                        }
+                      }
+
+                      return false;
+                    }
+
+                    function resetGameWorld() {
+                        // Estado principal
+                        gameStarted = false;
+                        gamePaused = false;
+                        playerAlive = true;
+                        gameOver = false;
+
+                        btcPizzaDayTriggered = false;
+                      showPizzaDayScreen = false;
+
+                        stopGameMusic();
+
+                        introScreen = true;
+                      introBlinkTimer = 0;
+
+                        // Dificuldade
+                        currentScrollSpeed = baseScrollSpeed;
+                        difficultyTimer = 0;
+
+                        // Player
+                        player.x = 450;
+                        player.y = 485;
+                        player.state = "idle";
+                        player.frame = 0;
+                        player.frameCounter = 0;
+
+                        // Vidas e BTC
+                        playerLives = 5;
+                        btcCollected = 0;
+                        nextExtraLifeAt = btcPerExtraLife;
+
+                        playerInvulnerable = false;
+                        invulnerabilityTimer = 0;
+
+                        // Rua
+                        streetX1 = 0;
+                        streetX2 = streetWidth;
+
+                        // Pizzaria volta para o início
+                        pizzaShopX = -20;
+                        pizzaShopY = -40;
+
+                        // Parallax volta para o início
+                        skyX1 = 0;
+                        skyX2 = skyWidth;
+
+                        bd2X1 = 0;
+                        bd2X2 = bd2Width;
+
+                        bdX1 = 0;
+                        bdX2 = bdWidth;
+
+                        treesX1 = 0;
+                        treesX2 = treesWidth;
+
+                        // Moedas
+                        btcCoins = [];
+                        nextCoinPatternX = 2200;
+                        btcFrame = 0;
+                        btcFrameCounter = 0;
+
+                        // Camada decorativa
+                      initializeDecorLayer();
+
+                        // Scamers
+                        scamers = [];
+                        nextScamerSpawnX = 2800;
+                        scamerFrame = 0;
+                        scamerFrameCounter = 0;
+
+                        // Obstáculos
+                        obstacles = [];
+                        nextObstacleSpawnX = 3600;
+
+                        // Gera moedas iniciais novamente
+                        generateCoinPattern();
+                        generateCoinPattern();
+                        generateCoinPattern();
+                      }
+
+                    function hitPlayer(source = "unknown") {
+                        if (!playerAlive || playerInvulnerable) return;
+
+                        playerLives--;
+
+                       if (source === "carWhite" || source === "carGray") {
+                        playCarCrashSfx();
+                      } else {
+                        playDamageSfx();
+                      }
+
+                        console.log(`💥 Dano recebido de: ${source}. Vidas restantes: ${playerLives}`);
+
+                        if (playerLives > 0) {
+                          playerInvulnerable = true;
+                          invulnerabilityTimer = invulnerabilityDuration;
+
+                         
+
+                          // opcional: limpa inimigos/obstáculos muito próximos
+                          scamers = scamers.filter((scamer) => scamer.x < player.x - 150 || scamer.x > player.x + 250);
+                         
+                        } else {
+                          playerLives = 0;
+                          playerAlive = false;
+                          gameStarted = false;
+                          gameOver = true;
+                          player.state = "idle";
+
+                          stopGameMusic();
+                          playGameOverSfx();
+
+                          console.log("☠️ GAME OVER! O jogador perdeu todas as vidas!");
+                        }
+                      }
+
+                     function checkExtraLifeReward() {
+                        if (btcCollected >= nextExtraLifeAt) {
+                          if (playerLives < maxPlayerLives) {
+                            playerLives++;
+
+                            playExtraLifeSfx();
+
+                            console.log(`❤️ Vida extra conquistada! Vidas: ${playerLives}/${maxPlayerLives}`);
+                          }
+
+                          nextExtraLifeAt += btcPerExtraLife;
+                        }
+                      }
+
+                    function updateDifficulty() {
+                        if (!gameStarted || gamePaused || !playerAlive || gameOver) {
+                          return;
+                        }
+
+                        difficultyTimer++;
+
+                        if (difficultyTimer >= difficultyIncreaseInterval) {
+                          difficultyTimer = 0;
+
+                          if (currentScrollSpeed < maxScrollSpeed) {
+                            currentScrollSpeed += speedIncreaseAmount;
+
+                            if (currentScrollSpeed > maxScrollSpeed) {
+                              currentScrollSpeed = maxScrollSpeed;
+                            }
+
+                            console.log(`⚡ Velocidade aumentou: ${currentScrollSpeed.toFixed(2)}`);
+                          }
+                        }
+                      }
+
+                      function drawIntroScreen() {
+                          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                          // Desenha o poster ocupando o canvas inteiro
+                          ctx.drawImage(
+                            posterImage,
+                            0,
+                            0,
+                            canvas.width,
+                            canvas.height
+                          );
+
+                          // Piscar do texto
+                          introBlinkTimer++;
+
+                          const showText = Math.floor(introBlinkTimer / 120) % 2 === 0;
+
+                          if (showText) {
+                            ctx.save();
+
+                            ctx.font = "bold 52px monospace";
+                            ctx.textAlign = "center";
+                            ctx.textBaseline = "middle";
+
+                            // sombra
+                            ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+                            ctx.fillText("PRESS SPACE TO START", canvas.width / 2 + 4, 930 + 4);
+
+                            // texto branco
+                            ctx.fillStyle = "white";
+                            ctx.fillText("PRESS SPACE TO START", canvas.width / 2, 930);
+
+                            ctx.restore();
+                          }
+                        }
+
+                // ==================== OBSTÁCULOS ====================
+
+                  // Imagens dos obstáculos
+                  let obstacleImages = {
+                    garbage: new Image(),
+                    carWhite: new Image(),
+                    carGray: new Image()
+                  };
+
+                  obstacleImages.garbage.src = 'sprites/map/garbage1.png';
+                  obstacleImages.carWhite.src = 'sprites/map/carwt1.png';
+                  obstacleImages.carGray.src = 'sprites/map/carcz1.png';
+
+                  // Lista dinâmica de obstáculos
+                  let obstacles = [];
+
+                  // Controle de spawn infinito
+                  let nextObstacleSpawnX = 3600;
+
+                  // Distância mínima entre obstáculos
+                  const minObstacleDistance = 1600;
+                  const maxObstaclesOnScreen = 2;
+
+                  // Efeito de piscar antes do obstáculo sumir
+                    const obstacleBlinkDuration = 45;
+                    const obstacleBlinkInterval = 5;
+
+                  // Faixas possíveis para obstáculos
+                // ==================== FAIXAS DA PISTA ====================
+
+                 
+
+                  function getRandomLane() {
+                    return randomFromArray(roadLanes);
+                  }
+
+                  // Tipos de obstáculos disponíveis
+                  const obstacleTypes = [
+                    "garbage",
+                    "carWhite",
+                    "carGray"
+                  ];
+
+                  function countObstaclesOnScreen() {
+                      return obstacles.filter((obstacle) => {
+                        return obstacle.x > -400 && obstacle.x < canvas.width + 300;
+                      }).length;
+                    }
+
+                  function isTooCloseToScamers(x, y) {
+                      return scamers.some((scamer) => {
+                        const distanceX = Math.abs(scamer.x - x);
+                        const distanceY = Math.abs(scamer.y - y);
+
+                        return distanceX < 1200;
+                      });
+                    }
+
+                  function isTooCloseToObstacles(x, y) {
+                      return obstacles.some((obstacle) => {
+                        const obstacleImage = obstacleImages[obstacle.type];
+
+                        const obstacleWidth = obstacleImage && obstacleImage.width ? obstacleImage.width : 300;
+                        const obstacleHeight = obstacleImage && obstacleImage.height ? obstacleImage.height : 200;
+
+                        const obstacleCenterX = obstacle.x + obstacleWidth / 2;
+                        const obstacleCenterY = obstacle.y + obstacleHeight / 2;
+
+                        const distanceX = Math.abs(obstacleCenterX - x);
+                        const distanceY = Math.abs(obstacleCenterY - y);
+
+                        // Regra especial para carros grandes
+                        if (obstacle.type === "carWhite" || obstacle.type === "carGray") {
+                          return distanceX < 1000 && distanceY < 420;
+                        }
+
+                        // Regra para obstáculos pequenos, como lixo
+                        return distanceX < 650 && distanceY < 220;
+                      });
+                    }
+
+                    function isTooCloseToCoinsForObstacle(x, y) {
+                      return btcCoins.some((coin) => {
+                        const distanceX = Math.abs(coin.x - x);
+                        const distanceY = Math.abs(coin.y - y);
+
+                        return distanceX < 350 && distanceY < 140;
+                      });
+                    }
+
+                  function createObstacle(type, x, lane) {
+                      let obstacleY = lane.y;
+
+                      if (isCarObstacle(type)) {
+                        obstacleY = getCarYPosition(type, lane.side);
+                      }
+
+                      obstacles.push({
+                        type: type,
+                        x: x,
+                        y: obstacleY,
+                        laneId: lane.id,
+                        side: lane.side || null,
+                        lanesBlocked: getObstacleBlockedLanes(type, lane.id)
+                      });
+                    }
+
+                    function spawnObstacle() {
+                        if (countObstaclesOnScreen() >= maxObstaclesOnScreen) {
+                          return;
+                        }
+
+                        let type = randomFromArray(obstacleTypes);
+                        let spawnX = nextObstacleSpawnX;
+                        let lane = findSafeLaneForObstacle(type, spawnX);
+                        let obstaclePreviewY = isCarObstacle(type)
+                        ? getCarYPosition(type, lane.side)
+                        : lane.y;
+
+                        // Se não houver rota segura, adia o obstáculo
+                        if (!lane) {
+                          nextObstacleSpawnX += 600;
+                          return;
+                        }
+
+                        let attempts = 0;
+
+                         while (
+                        (
+                          isTooCloseToCoinsForObstacle(spawnX, obstaclePreviewY) ||
+                          isTooCloseToScamers(spawnX, obstaclePreviewY) ||
+                          isTooCloseToObstacles(spawnX, obstaclePreviewY)
+                        ) &&
+                        attempts < 12
+                      ) {
+                          lane = findSafeLaneForObstacle(type, spawnX);
+
+                          if (!lane) {
+                            nextObstacleSpawnX += 600;
+                            return;
+                          }
+
+                          spawnX += 250;
+                          attempts++;
+                        }
+
+                        function isCarObstacle(type) {
+                        return type === "carWhite" || type === "carGray";
+                      }
+
+                        createObstacle(type, spawnX, lane);
+
+                        nextObstacleSpawnX += minObstacleDistance + Math.floor(Math.random() * 1200);
+                      }
+
+                    function getObstacleBlockedLanes(type, laneId) {
+                        // Lixeira ocupa apenas uma faixa
+                        if (type === "garbage") {
+                          return [laneId];
+                        }
+
+                        // Carros só bloqueiam a borda onde aparecem.
+                        // O sprite continua grande, mas parte dele fica fora da pista.
+                      if (isCarObstacle(type)) {
+                        if (laneId === 0) {
+                          return [0];
+                        }
+
+                        if (laneId === 5) {
+                          return [5];
+                        }
+                      }
+
+                        return [laneId];
+                      }
+
+                      function getScamerBlockedLanes(laneId) {
+                        return [laneId];
+                      }
+
+                      function getBlockedLanesInZone(x, zoneWidth = 650) {
+                        let blocked = new Set();
+
+                        scamers.forEach((scamer) => {
+                          if (Math.abs(scamer.x - x) < zoneWidth) {
+                            getScamerBlockedLanes(scamer.laneId).forEach((lane) => {
+                              blocked.add(lane);
+                            });
+                          }
+                        });
+
+                        obstacles.forEach((obstacle) => {
+                          if (Math.abs(obstacle.x - x) < zoneWidth) {
+                            obstacle.lanesBlocked.forEach((lane) => {
+                              blocked.add(lane);
+                            });
+                          }
+                        });
+
+                        return blocked;
+                      }
+
+                      function wouldBlockAllLanes(x, lanesToAdd) {
+                        let blocked = getBlockedLanesInZone(x);
+
+                        lanesToAdd.forEach((lane) => {
+                          blocked.add(lane);
+                        });
+
+                        return blocked.size >= roadLanes.length;
+                      }
+
+                      function findSafeLaneForScamer(x) {
+                        let shuffledLanes = [...roadLanes].sort(() => Math.random() - 0.5);
+
+                        for (let lane of shuffledLanes) {
+                          let lanesToAdd = getScamerBlockedLanes(lane.id);
+
+                          if (!wouldBlockAllLanes(x, lanesToAdd)) {
+                            return lane;
+                          }
+                        }
+
+                        return null;
+                      }
+
+                      function isCarObstacle(type) {
+                          return type === "carWhite" || type === "carGray";
+                        }
+
+                    function getCarYPosition(type, side) {
+                        const img = obstacleImages[type];
+
+                        const carHeight = img && img.height ? img.height : 300;
+
+                        if (side === "top") {
+                          // Carro invade a parte superior da pista visual,
+                          // mas fica bem acima da área principal do player
+                          return roadVisualTopY - carHeight * 0.20;
+                        }
+
+                        if (side === "bottom") {
+                          // Carro fica mais embaixo na pista visual,
+                          // usando a área que antes não estava sendo considerada
+                          return roadVisualBottomY - carHeight * 0.65;
+                        }
+
+                        return playerMaxY;
+                      }
+
+                     function findSafeLaneForObstacle(type, x) {
+                        let availableLanes;
+
+                        // Carros ficam parcialmente fora da pista
+                        // Eles nunca nascem no centro horizontal onde o gato corre
+                     if (isCarObstacle(type)) {
+                         availableLanes = [
+                           { id: 0, side: "top" },
+                           { id: 5, side: "bottom" }
+                         ];
+                       } else {
+                         availableLanes = roadLanes;
+                       }
+
+                        let shuffledLanes = [...availableLanes].sort(() => Math.random() - 0.5);
+
+                        for (let lane of shuffledLanes) {
+                          let lanesToAdd = getObstacleBlockedLanes(type, lane.id);
+
+                          if (!wouldBlockAllLanes(x, lanesToAdd)) {
+                            return lane;
+                          }
+                        }
+
+                        return null;
+                      }
+
+     // ==================== PERSONAGEM ====================
+      let idleImage = new Image();
+      let runImages = [];           // Array para as 25 imagens de corrida
+
+      let player = {
+        x: 450,
+        y: 485,
+        width: 0,
+        height: 0,
+        speed: 8,
+        state: "idle",              // "idle" ou "running"
+        frame: 0,                   // Frame atual da animação
+        frameCounter: 0,
+        animationSpeed: 8          // Quanto menor = mais rápido
+      };
+
+    // Debug variables
+    let debugMode = true;           // Começa ligado
+    let mouseX = 0;
+    let mouseY = 0;
+    let fixedX = null;
+    let fixedY = null;
+    let borderVisible = true;   // Moldura vermelha ligada por padrão
+    let roadDebugVisible = false; // Mostra área jogável da pista com a tecla R
+    let gamePaused = false; // Pausa o jogo com a tecla P
+
+    // Carregar imagem
+    streetImage.src = 'sprites/map/street1.png';
+
+    skyImage.onload = () => {
+        skyWidth = skyImage.width;
+        skyHeight = skyImage.height;
+
+        skyX1 = 0;
+        skyX2 = skyWidth;
+
+        console.log(`✅ Parallax sky carregado! Tamanho: ${skyWidth} x ${skyHeight}`);
+      };
+
+    bd2Image.onload = () => {
+        bd2Width = bd2Image.width;
+        bd2Height = bd2Image.height;
+
+        bd2X1 = 0;
+        bd2X2 = bd2Width;
+
+        console.log(`✅ Parallax bd2 carregado! Tamanho: ${bd2Width} x ${bd2Height}`);
+      };
+
+    bdImage.onload = () => {
+        bdWidth = bdImage.width;
+        bdHeight = bdImage.height;
+
+        bdX1 = 0;
+        bdX2 = bdWidth;
+
+        console.log(`✅ Parallax bd carregado! Tamanho: ${bdWidth} x ${bdHeight}`);
+      };
+
+    treesImage.onload = () => {
+        treesWidth = treesImage.width;
+        treesHeight = treesImage.height;
+
+        treesX1 = 0;
+        treesX2 = treesWidth;
+
+        console.log(`✅ Parallax trees carregado! Tamanho: ${treesWidth} x ${treesHeight}`);
+      };
+
+        // Carregar imagem do personagem Idle
+          idleImage.src = 'sprites/character/idle/idle1.png';
+
+            // Carregar as 25 frames de corrida
+              for (let i = 1; i <= 25; i++) {
+                let img = new Image();
+                img.src = `sprites/character/run/rmv${i}.png`;
+                runImages.push(img);
+              }  
+
+              idleImage.onload = () => {
+                  player.width = idleImage.width;
+                  player.height = idleImage.height;
+                  console.log("✅ Idle carregado!");
+                };
+
+            streetImage.onload = () => {
+                streetWidth = streetImage.width;
+                streetHeight = streetImage.height;
+
+                console.log(`✅ Imagem carregada! Tamanho: ${streetWidth} x ${streetHeight}`);
+
+                streetX1 = 0;
+                streetX2 = streetWidth;     // Segunda imagem ao lado
+              generateCoinPattern();
+              generateCoinPattern();
+              generateCoinPattern();
+
+              initializeDecorLayer();
+
+              gameLoop();
+              };
+
+    // Atualiza posição do mouse
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = Math.floor(e.clientX - rect.left);
+      mouseY = Math.floor(e.clientY - rect.top);
+    });
+
+    // Clique direito = Fixar posição
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); // Evita menu do botão direito
+      const rect = canvas.getBoundingClientRect();
+      fixedX = Math.floor(e.clientX - rect.left);
+      fixedY = Math.floor(e.clientY - rect.top);
+    });
+
+      // ==================== CONTROLES ====================
+        let keys = {};
+
+        document.addEventListener('keydown', (e) => {
+          keys[e.key.toLowerCase()] = true;
+
+          if (e.code === "Space" && introScreen) {
+            introScreen = false;
+
+            // Sai da tela inicial, mas NÃO inicia o jogo ainda
+            gameStarted = false;
+            player.state = "idle";
+
+            console.log("✅ Tela inicial fechada. Pressione D para começar!");
+          }
+
+          if (e.key.toLowerCase() === 'l') {
+            btcCollected = 10000;
+            checkPizzaDayGoal();
+
+            console.log("🧪 DEBUG: BTC ajustado para 10000");
+          }
+
+          if (e.key === 'F7') {
+            e.preventDefault();
+            debugMode = !debugMode;
+            debugPanel.style.display = debugMode ? 'block' : 'none';
+          }
+
+          if (e.key.toLowerCase() === 'm') {
+            borderVisible = !borderVisible;
+            canvas.style.border = borderVisible ? '3px solid red' : 'none';
+          }
+
+          if (e.key.toLowerCase() === 'r') {
+            roadDebugVisible = !roadDebugVisible;
+          }
+
+          if (e.key.toLowerCase() === 'p' && gameStarted && playerAlive && !showPizzaDayScreen) {
+            gamePaused = !gamePaused;
+
+            if (gamePaused) {
+              pauseGameMusic();
+            } else {
+              playGameMusic();
+            }
+          }
+
+          if (e.key.toLowerCase() === 'd' && !gameStarted) {
+            if (!playerAlive && gameOver) {
+              resetGameWorld();
+              return;
+            }
+
+           gameStarted = true;
+            player.state = "running";
+
+            playGameMusic();
+
+            console.log("🚀 Jogo iniciado! Pista rolando...");
+          }
+
+        });
+
+        document.addEventListener('keyup', (e) => {
+          keys[e.key.toLowerCase()] = false;
+        });
+
+
+
+        // Loop principal
+          function gameLoop() {
+              if (introScreen) {
+                drawIntroScreen();
+                requestAnimationFrame(gameLoop);
+                return;
+              }
+
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Fundo base do canvas
+            ctx.fillStyle = "#85fcca";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            updateDifficulty();
+
+            // ==================== DESENHAR PARALLAX SKY ====================
+
+            if (gameStarted && !gamePaused) {
+              skyX1 -= currentScrollSpeed * skyParallaxFactor;
+              skyX2 -= currentScrollSpeed * skyParallaxFactor;
+            }
+
+            let currentSkyX = skyX1;
+
+            while (currentSkyX < canvas.width) {
+              ctx.drawImage(skyImage, currentSkyX, skyY);
+              currentSkyX += skyWidth;
+            }
+
+            ctx.drawImage(skyImage, skyX1 - skyWidth, skyY);
+
+            if (skyX1 <= -skyWidth) {
+              skyX1 = skyX2 + skyWidth;
+            }
+
+            if (skyX2 <= -skyWidth) {
+              skyX2 = skyX1 + skyWidth;
+            }
+
+            // ==================== DESENHAR PARALLAX FUNDO ====================
+
+            if (gameStarted && !gamePaused) {
+              treesX1 -= currentScrollSpeed * treesParallaxFactor;
+              treesX2 -= currentScrollSpeed * treesParallaxFactor;
+            }
+
+            // ==================== DESENHAR PARALLAX BD2 ====================
+
+            if (gameStarted && !gamePaused) {
+              bd2X1 -= currentScrollSpeed * bd2ParallaxFactor;
+              bd2X2 -= currentScrollSpeed * bd2ParallaxFactor;
+            }
+
+            let currentBd2X = bd2X1;
+
+            while (currentBd2X < canvas.width) {
+              ctx.drawImage(bd2Image, currentBd2X, bd2Y);
+              currentBd2X += bd2Width;
+            }
+
+            ctx.drawImage(bd2Image, bd2X1 - bd2Width, bd2Y);
+
+            if (bd2X1 <= -bd2Width) {
+              bd2X1 = bd2X2 + bd2Width;
+            }
+
+            if (bd2X2 <= -bd2Width) {
+              bd2X2 = bd2X1 + bd2Width;
+            }
+
+            // ==================== DESENHAR PARALLAX BD ====================
+
+            if (gameStarted && !gamePaused) {
+              bdX1 -= currentScrollSpeed * bdParallaxFactor;
+              bdX2 -= currentScrollSpeed * bdParallaxFactor;
+            }
+
+            let currentBdX = bdX1;
+
+            while (currentBdX < canvas.width) {
+              ctx.drawImage(bdImage, currentBdX, bdY);
+              currentBdX += bdWidth;
+            }
+
+            ctx.drawImage(bdImage, bdX1 - bdWidth, bdY);
+
+            if (bdX1 <= -bdWidth) {
+              bdX1 = bdX2 + bdWidth;
+            }
+
+            if (bdX2 <= -bdWidth) {
+              bdX2 = bdX1 + bdWidth;
+            }
+
+            // Desenha a camada trees em loop
+            let currentTreesX = treesX1;
+
+            while (currentTreesX < canvas.width) {
+              ctx.drawImage(treesImage, currentTreesX, treesY);
+              currentTreesX += treesWidth;
+            }
+
+            ctx.drawImage(treesImage, treesX1 - treesWidth, treesY);
+
+            // Reposiciona para rolagem infinita
+            if (treesX1 <= -treesWidth) {
+              treesX1 = treesX2 + treesWidth;
+            }
+
+            if (treesX2 <= -treesWidth) {
+              treesX2 = treesX1 + treesWidth;
+            }
+
+            // ==================== CAMADA DECORATIVA ENTRE TREES E PISTA ====================
+
+            decorObjects.forEach((decor) => {
+              if (gameStarted && !gamePaused) {
+                decor.x -= currentScrollSpeed;
+              }
+            });
+
+            // Move também o ponto do próximo spawn junto com o cenário
+            if (gameStarted && !gamePaused) {
+              nextDecorSpawnX -= currentScrollSpeed;
+            }
+
+            // Gera novos objetos decorativos continuamente
+            while (gameStarted && !gamePaused && nextDecorSpawnX < canvas.width + 800) {
+              spawnNextDecorObject();
+            }
+
+            decorObjects.forEach((decor) => {
+              const img = decorImages[decor.type];
+
+              if (img && img.complete) {
+                ctx.drawImage(
+                  img,
+                  Math.round(decor.x),
+                  decor.y
+                );
+              }
+            });
+
+            decorObjects = decorObjects.filter((decor) => {
+              const img = decorImages[decor.type];
+              const width = img && img.width ? img.width : 250;
+
+              return decor.x > -width - 100;
+            });
+
+            // Rolagem da pista (só começa depois de apertar D)
+            if (gameStarted && !gamePaused) {
+              pizzaShopX -= currentScrollSpeed;
+              streetX1 -= currentScrollSpeed;
+              streetX2 -= currentScrollSpeed;
+            }
+
+            // Desenha múltiplas cópias da pista para preencher a tela
+            let currentX = streetX1;
+            while (currentX < canvas.width) {
+             ctx.drawImage(streetImage, Math.round(currentX), streetY);
+              currentX += streetWidth ;
+            }
+            ctx.drawImage(streetImage, Math.round(streetX1 - streetWidth), streetY);
+
+            // Reposiciona para rolagem infinita
+            if (gameStarted) {
+              if (streetX1 <= -streetWidth) streetX1 = streetX2 + streetWidth;
+              if (streetX2 <= -streetWidth) streetX2 = streetX1 + streetWidth;
+            }
+
+            ctx.drawImage(pizzaShopImage, pizzaShopX, pizzaShopY);
+
+            // ==================== ANIMAÇÃO DAS MOEDAS ====================
+
+            if (!gamePaused) {
+              btcFrameCounter++;
+
+              if (btcFrameCounter >= btcAnimationSpeed) {
+                btcFrame = (btcFrame + 1) % 5;
+                btcFrameCounter = 0;
+              }
+            }
+
+            // ==================== ANIMAÇÃO DO SCAMER ====================
+
+            if (!gamePaused) {
+              scamerFrameCounter++;
+
+              if (scamerFrameCounter >= scamerAnimationSpeed) {
+                scamerFrame = (scamerFrame + 1) % 6;
+                scamerFrameCounter = 0;
+              }
+            }
+
+          // Move o ponto do próximo padrão junto com o cenário
+            if (gameStarted && !gamePaused) {
+              nextCoinPatternX -= currentScrollSpeed;
+            }
+
+            // Gera novos padrões infinitamente antes da tela ficar vazia
+            if (gameStarted && !gamePaused && nextCoinPatternX < canvas.width + 1200) {
+              generateCoinPattern();
+            }
+
+           // ==================== SPAWN SEGURO DO SCAMER ====================
+
+            const scamerSpawnTriggerX = canvas.width + 1200;
+
+            // Se já existem scamers demais ativos, mantém o próximo spawn longe da tela
+            if (gameStarted && !gamePaused && playerAlive && countScamersOnScreen() >= maxScamersOnScreen) {
+              nextScamerSpawnX = Math.max(nextScamerSpawnX, scamerSpawnTriggerX);
+            }
+
+            // Move o ponto de spawn do scamer junto com o cenário apenas se ainda puder gerar scamer
+            if (gameStarted && !gamePaused && playerAlive && countScamersOnScreen() < maxScamersOnScreen) {
+              nextScamerSpawnX -= currentScrollSpeed;
+            }
+
+            // Gera scamers apenas fora da tela, nunca no meio dela
+            if (
+              gameStarted &&
+              !gamePaused &&
+              playerAlive &&
+              countScamersOnScreen() < maxScamersOnScreen &&
+              nextScamerSpawnX < scamerSpawnTriggerX
+            ) {
+              if (nextScamerSpawnX < canvas.width + 400) {
+                nextScamerSpawnX = scamerSpawnTriggerX;
+              }
+
+              spawnScamer();
+            }
+
+            // Move o ponto de spawn dos obstáculos junto com o cenário
+            if (gameStarted && !gamePaused && playerAlive) {
+              nextObstacleSpawnX -= currentScrollSpeed;
+            }
+
+            // Gera obstáculos infinitamente com limite em tela
+            if (
+              gameStarted &&
+              !gamePaused &&
+              playerAlive &&
+              nextObstacleSpawnX < canvas.width + 1400 &&
+              countObstaclesOnScreen() < maxObstaclesOnScreen
+            ) {
+              spawnObstacle();
+            }
+
+            // ==================== DESENHAR MOEDAS ====================
+
+            btcCoins.forEach((coin) => {
+
+            if (gameStarted && !gamePaused) {
+                coin.x -= currentScrollSpeed;
+              }
+
+              if (!coin.collected) {
+                ctx.drawImage(
+                  btcCoinFrames[btcFrame],
+                  coin.x,
+                  coin.y
+                );
+
+                let coinWidth = btcCoinFrames[btcFrame].width;
+                let coinHeight = btcCoinFrames[btcFrame].height;
+
+                let hitboxPadding = 20;
+
+                if (
+                  player.x < coin.x + coinWidth - hitboxPadding &&
+                  player.x + player.width > coin.x + hitboxPadding &&
+                  player.y < coin.y + coinHeight - hitboxPadding &&
+                  player.y + player.height > coin.y + hitboxPadding
+                ) {
+                coin.collected = true;
+                  btcCollected++;
+
+                  playCoinSfx();
+
+                  checkExtraLifeReward();
+                  checkPizzaDayGoal();
+
+                  console.log(`🪙 BTC coletado! Total: ${btcCollected}`);
+                }
+              }
+            });
+
+            // Remove moedas que já saíram da tela ou foram coletadas
+            btcCoins = btcCoins.filter((coin) => {
+              return coin.x > -150 && !coin.collected;
+            });
+
+            // ==================== DESENHAR SCAMERS ====================
+
+            scamers.forEach((scamer) => {
+
+            if (gameStarted && !gamePaused && playerAlive) {
+                scamer.x -= currentScrollSpeed;
+              }
+
+              ctx.drawImage(
+                scamerFrames[scamerFrame],
+                scamer.x,
+                scamer.y
+              );
+
+              // ==================== COLISÃO COM SCAMER ====================
+
+              let scamerWidth = scamerFrames[scamerFrame].width;
+              let scamerHeight = scamerFrames[scamerFrame].height;
+
+              let hitboxPadding = 35;
+
+            const playerHitboxes = getPlayerHitboxes();
+
+              const scamerHitbox = {
+                x: scamer.x + hitboxPadding,
+                y: scamer.y + hitboxPadding,
+                width: scamerWidth - hitboxPadding * 2,
+                height: scamerHeight - hitboxPadding * 2
+              };
+
+              if (checkCollisionWithMultipleHitboxes(playerHitboxes, [scamerHitbox])) {
+                hitPlayer("scamer");
+              }
+            });
+
+            // Remove scamers que já saíram da tela
+            scamers = scamers.filter((scamer) => {
+              return scamer.x > -250;
+            });
+
+           // ==================== DESENHAR OBSTÁCULOS ====================
+
+            obstacles.forEach((obstacle) => {
+
+            if (gameStarted && !gamePaused && playerAlive) {
+                obstacle.x -= currentScrollSpeed;
+              }
+
+              let obstacleImage = obstacleImages[obstacle.type];
+
+              // ==================== EFEITO DE PISCAR DO OBSTÁCULO ====================
+
+              let shouldDrawObstacle = true;
+
+              if (obstacle.isBlinking) {
+                if (!gamePaused) {
+                  obstacle.blinkTimer--;
+                }
+
+                shouldDrawObstacle = Math.floor(obstacle.blinkTimer / obstacleBlinkInterval) % 2 === 0;
+
+                if (obstacle.blinkTimer <= 0) {
+                  obstacle.remove = true;
+                }
+              }
+
+              if (shouldDrawObstacle) {
+                ctx.save();
+
+                if (obstacle.isBlinking) {
+                  ctx.globalAlpha = 0.45;
+                }
+
+                ctx.drawImage(
+                  obstacleImage,
+                  obstacle.x,
+                  obstacle.y
+                );
+
+                ctx.restore();
+              }
+
+              // ==================== COLISÃO COM OBSTÁCULOS ====================
+
+            const playerHitboxes = getPlayerHitboxes();
+              const obstacleHitboxes = getObstacleHitboxes(obstacle);
+
+              if (roadDebugVisible) {
+                ctx.save();
+                ctx.strokeStyle = "orange";
+                ctx.lineWidth = 3;
+
+                obstacleHitboxes.forEach((hitbox) => {
+                  ctx.strokeRect(
+                    hitbox.x,
+                    hitbox.y,
+                    hitbox.width,
+                    hitbox.height
+                  );
+                });
+
+                ctx.restore();
+              }
+
+             if (checkCollisionWithMultipleHitboxes(playerHitboxes, obstacleHitboxes)) {
+                if (!obstacle.isBlinking) {
+                  obstacle.isBlinking = true;
+                  obstacle.blinkTimer = obstacleBlinkDuration;
+
+                  hitPlayer(obstacle.type);
+                }
+              }
+            });
+
+            // Remove obstáculos que já saíram da tela
+            obstacles = obstacles.filter((obstacle) => {
+              return obstacle.x > -500 && !obstacle.remove;
+            });
+
+            // ==================== INVULNERABILIDADE ====================
+            if (playerInvulnerable) {
+              invulnerabilityTimer--;
+
+              if (invulnerabilityTimer <= 0) {
+                playerInvulnerable = false;
+                invulnerabilityTimer = 0;
+              }
+            }
+
+            // ==================== MOVIMENTO DO PERSONAGEM ====================
+            if (gameStarted && !gamePaused && playerAlive) {
+              // Movimento Vertical (W e S)
+              if (keys['w'] || keys['arrowup']) {
+                player.y -= player.speed;
+              }
+              if (keys['s'] || keys['arrowdown']) {
+                player.y += player.speed;
+              }
+
+              // Limites no eixo Y
+            if (player.y < playerMinY) player.y = playerMinY;
+              if (player.y > playerMaxY) player.y = playerMaxY;
+            }
+
+          // ==================== ANIMAÇÃO DO PERSONAGEM ====================
+
+            if (player.state === "running" && playerAlive && !gamePaused) {
+              player.frameCounter++;
+
+              if (player.frameCounter >= player.animationSpeed) {
+                player.frame = (player.frame + 1) % 25;
+                player.frameCounter = 0;
+              }
+            }
+
+            const shouldDrawPlayer = !playerInvulnerable || Math.floor(invulnerabilityTimer / 5) % 2 === 0;
+
+            if (shouldDrawPlayer) {
+              if (player.state === "running" && playerAlive) {
+                ctx.drawImage(runImages[player.frame], player.x, player.y);
+              } else {
+                ctx.drawImage(idleImage, player.x, player.y);
+              }
+            }
+
+            // Atualiza HUD de Debug
+            if (debugMode) {
+              document.getElementById('mouseX').textContent = mouseX;
+              document.getElementById('mouseY').textContent = mouseY;
+              document.getElementById('fixedX').textContent = fixedX !== null ? fixedX : '-';
+              document.getElementById('fixedY').textContent = fixedY !== null ? fixedY : '-';
+            }
+
+            // ==================== TELA DE CONTROLES NO IDLE ====================
+
+            if (!introScreen && !gameStarted && playerAlive && !gameOver) {
+              const controlsWidth = 900;
+              const controlsHeight = 600;
+
+              const controlsX = 800;
+              const controlsY = (canvas.height - controlsHeight) / 2;
+
+              ctx.drawImage(
+                controlsImage,
+                controlsX,
+                controlsY,
+                controlsWidth,
+                controlsHeight
+              );
+            }
+
+            // ==================== DEBUG ÁREA JOGÁVEL DA PISTA ====================
+
+            if (roadDebugVisible) {
+              ctx.save();
+
+              // Área visual total da pista
+              ctx.fillStyle = "rgba(0, 120, 255, 0.12)";
+              ctx.fillRect(
+                0,
+                roadVisualTopY,
+                canvas.width,
+                roadVisualBottomY - roadVisualTopY
+              );
+
+              ctx.strokeStyle = "deepskyblue";
+              ctx.lineWidth = 4;
+              ctx.strokeRect(
+                0,
+                roadVisualTopY,
+                canvas.width,
+                roadVisualBottomY - roadVisualTopY
+              );
+
+              ctx.fillStyle = "deepskyblue";
+              ctx.font = "26px Arial";
+              ctx.fillText("ÁREA VISUAL TOTAL DA PISTA", 40, roadVisualTopY + 35);
+              ctx.fillText(`Y visual máximo: ${roadVisualBottomY}`, 40, roadVisualBottomY - 20);
+
+              // Área real onde o ponto Y do player pode andar
+              ctx.fillStyle = "rgba(0, 255, 0, 0.16)";
+              ctx.fillRect(
+                0,
+                playerMinY,
+                canvas.width,
+                playerMaxY - playerMinY
+              );
+
+              ctx.strokeStyle = "lime";
+              ctx.lineWidth = 4;
+              ctx.strokeRect(
+                0,
+                playerMinY,
+                canvas.width,
+                playerMaxY - playerMinY
+              );
+
+              ctx.fillStyle = "lime";
+              ctx.font = "26px Arial";
+              ctx.fillText("ÁREA DE MOVIMENTO DO PLAYER.Y", 40, playerMinY - 15);
+              ctx.fillText(`Player Y mínimo: ${playerMinY}`, 40, playerMinY + 70);
+              ctx.fillText(`Player Y máximo: ${playerMaxY}`, 40, playerMaxY - 15);
+
+              ctx.restore();
+            }
+
+            // ==================== DEBUG HITBOX DO PLAYER ====================
+
+            if (roadDebugVisible) {
+              const playerHitboxes = getPlayerHitboxes();
+
+              ctx.save();
+              ctx.strokeStyle = "red";
+              ctx.lineWidth = 3;
+
+              playerHitboxes.forEach((hitbox) => {
+                ctx.strokeRect(
+                  hitbox.x,
+                  hitbox.y,
+                  hitbox.width,
+                  hitbox.height
+                );
+              });
+
+              ctx.restore();
+            }
+
+           // ==================== OVERLAY DE ILUMINAÇÃO ====================
+
+            ctx.save();
+            ctx.globalAlpha = 0.45;
+
+            ctx.drawImage(
+              overlayImage,
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+
+            ctx.restore();
+
+            // ==================== HUD BTC ====================
+
+           drawGameHUD();
+
+            // ==================== TELA DE PAUSA ====================
+
+            if (gamePaused && playerAlive) {
+              ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+              ctx.fillStyle = "white";
+              ctx.font = "80px Arial";
+              ctx.fillText("PAUSADO", 790, 480);
+
+              ctx.fillStyle = "white";
+              ctx.font = "36px Arial";
+              ctx.fillText("Press P to continue", 735, 540);
+            }
+
+            // ==================== BTC PIZZA DAY SCREEN ====================
+
+            if (showPizzaDayScreen) {
+              ctx.save();
+
+              // escurece o fundo
+              ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+              // tamanho da imagem
+              const pizzaDayWidth = 1100;
+              const pizzaDayHeight = 800;
+
+              const pizzaDayX = (canvas.width - pizzaDayWidth) / 2;
+              const pizzaDayY = (canvas.height - pizzaDayHeight) / 2;
+
+              ctx.drawImage(
+                pizzaDayImage,
+                pizzaDayX,
+                pizzaDayY,
+                pizzaDayWidth,
+                pizzaDayHeight
+              );
+
+              // texto
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.font = "bold 54px monospace";
+
+              // sombra
+              ctx.fillStyle = "rgba(0,0,0,0.8)";
+              ctx.fillText("HAPPY BTC PIZZA DAY", canvas.width / 2 + 4, pizzaDayY + pizzaDayHeight - 55 + 4);
+
+              // texto principal
+              ctx.fillStyle = "white";
+              ctx.fillText("HAPPY BTC PIZZA DAY", canvas.width / 2, pizzaDayY + pizzaDayHeight - 55);
+
+              ctx.restore();
+            }
+
+
+            // ==================== TELA DE MORTE ====================
+
+            if (gameOver) {
+              ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+              ctx.fillStyle = "red";
+              ctx.font = "90px Arial";
+              ctx.fillText("GAME OVER", 690, 430);
+
+              ctx.fillStyle = "white";
+              ctx.font = "38px Arial";
+              ctx.fillText("you loose", 881, 500);
+
+              ctx.fillStyle = "white";
+              ctx.font = "34px Arial";
+              ctx.fillText("Press D to restart", 835, 560);
+            }
+
+            requestAnimationFrame(gameLoop);
+          }
+  </script>
+
+</body>
+
+</html>
